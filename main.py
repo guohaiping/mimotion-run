@@ -124,6 +124,9 @@ class MiMotion():
 
             r1 = requests.post(url=url1, data=data1, headers=headers, allow_redirects=False)
             #print(r1)
+            if "Location" not in r1.headers:
+                print("登录接口返回异常: 未获取到跳转信息")
+                return None, None
             location = r1.headers["Location"]
             code_pattern = re.compile("(?<=access=).*?(?=&)")
             code_matches = code_pattern.findall(location)
@@ -162,8 +165,15 @@ class MiMotion():
                 }
             r2 = requests.post(url=url2, data=data2, headers=headers).json()
             #print(r2)
-            login_token = r2["token_info"]["login_token"]
-            userid = r2["token_info"]["user_id"]
+            token_info = r2.get("token_info") if isinstance(r2, dict) else None
+            if not token_info:
+                print("登录失败: 未获取到 token 信息")
+                return None, None
+            login_token = token_info.get("login_token")
+            userid = token_info.get("user_id")
+            if not login_token or not userid:
+                print("登录失败: token 信息不完整")
+                return None, None
             return login_token, userid
         except Exception as e:
             error_traceback = traceback.format_exc()
@@ -209,10 +219,10 @@ class MiMotion():
         else:
             user = "+86" + user
         login_token, userid = self.login(user, password)
-        if login_token == 0:
+        if not login_token or not userid or login_token == 0:
             msg = [
                 {"name": "帐号信息", "value": f"{user[:4]}****{user[-4:]}"},
-                {"name": "修改信息", "value": f"登陆失败\n"},
+                {"name": "修改信息", "value": "登陆失败"},
             ]
         else:
             try:
@@ -235,20 +245,24 @@ class MiMotion():
                 #print(f"{response['message']}")
                 if response['message'] == "success":
                     msg = [
-                    {"name": "帐号信息", "value": f"{user[:4]}****{user[-4:]}"},
-                    {"name": "修改信息", "value": f"{response['message']}"},
-                    {"name": "修改步数", "value": f"{step}\n"},
+                        {"name": "帐号信息", "value": f"{user[:4]}****{user[-4:]}"},
+                        {"name": "修改信息", "value": f"{response['message']}"},
+                        {"name": "修改步数", "value": f"{step}"},
                     ]
                 else:
                     msg = [
                         {"name": "帐号信息", "value": f"{user[:4]}****{user[-4:]}"},
-                        {"name": "修改信息", "value": f"登陆失败\n"},
+                        {"name": "修改信息", "value": "登陆失败"},
                     ]
-                msg = "\n".join([f"{one.get('name')}: {one.get('value')}" for one in msg])
-                return msg
             except Exception as e:
                 error_traceback = traceback.format_exc()
                 print(error_traceback)
+                msg = [
+                    {"name": "帐号信息", "value": f"{user[:4]}****{user[-4:]}"},
+                    {"name": "修改信息", "value": "登陆失败"},
+                ]
+        msg = "\n".join([f"{one.get('name')}: {one.get('value')}" for one in msg])
+        return msg
 
 if __name__ == "__main__":
     try:
